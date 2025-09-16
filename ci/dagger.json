@@ -1,6 +1,12 @@
 {
   "name": "ci",
   "sdk": "go",
+  "dependencies": [
+    {
+      "name": "go",
+      "source": "github.com/vito/daggerverse/go@36e8ce2f9eb52cd73c4d5397ed4ed65912d7b6ac"
+    }
+  ],
   "source": ".",
-  "engineVersion": "v0.11.2"
+  "engineVersion": "v0.12.0"
 }

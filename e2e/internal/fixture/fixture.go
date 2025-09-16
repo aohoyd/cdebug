@@ -22,13 +22,13 @@ const (
 
 func ctrCmd(args ...string) icmd.Cmd {
 	return icmd.Command(
-		"sudo", append([]string{"-E", "ctr", "--namespace", ContainerdCtrNamespace}, args...)...,
+		"ctr", append([]string{"--namespace", ContainerdCtrNamespace}, args...)...,
 	)
 }
 
 func dockerCmd(args ...string) icmd.Cmd {
 	return icmd.Command(
-		"sudo", append([]string{"-E", "docker"}, args...)...,
+		"docker", args...,
 	)
 }
 
