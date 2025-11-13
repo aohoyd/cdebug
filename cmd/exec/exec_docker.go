@@ -11,10 +11,10 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/sirupsen/logrus"
 
-	"github.com/iximiuz/cdebug/pkg/cliutil"
-	"github.com/iximiuz/cdebug/pkg/docker"
-	"github.com/iximiuz/cdebug/pkg/tty"
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
+	"github.com/aohoyd/cdebug/pkg/docker"
+	"github.com/aohoyd/cdebug/pkg/tty"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 func runDebuggerDocker(ctx context.Context, cli cliutil.CLI, opts *options) error {

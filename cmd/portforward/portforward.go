@@ -17,10 +17,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/cdebug/pkg/cliutil"
-	"github.com/iximiuz/cdebug/pkg/docker"
-	"github.com/iximiuz/cdebug/pkg/signalutil"
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
+	"github.com/aohoyd/cdebug/pkg/docker"
+	"github.com/aohoyd/cdebug/pkg/signalutil"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 // TODO:

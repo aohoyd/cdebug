@@ -8,7 +8,7 @@ import (
 
 	"gotest.tools/icmd"
 
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 const (

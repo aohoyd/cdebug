@@ -29,10 +29,10 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	watchtools "k8s.io/client-go/tools/watch"
 
-	"github.com/iximiuz/cdebug/pkg/cliutil"
-	ckubernetes "github.com/iximiuz/cdebug/pkg/kubernetes"
-	"github.com/iximiuz/cdebug/pkg/tty"
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
+	ckubernetes "github.com/aohoyd/cdebug/pkg/kubernetes"
+	"github.com/aohoyd/cdebug/pkg/tty"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 // TODO: Handle exit codes - terminate the `cdebug exec` command with the same exit code as the debugger container.

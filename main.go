@@ -12,9 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/cdebug/cmd/exec"
-	"github.com/iximiuz/cdebug/cmd/portforward"
-	"github.com/iximiuz/cdebug/pkg/cliutil"
+	"github.com/aohoyd/cdebug/cmd/exec"
+	"github.com/aohoyd/cdebug/cmd/portforward"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
 )
 
 var (

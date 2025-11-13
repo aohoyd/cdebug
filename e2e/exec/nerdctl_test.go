@@ -7,8 +7,8 @@ import (
 	"gotest.tools/assert/cmp"
 	"gotest.tools/v3/icmd"
 
-	"github.com/iximiuz/cdebug/e2e/internal/fixture"
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/e2e/internal/fixture"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 func TestExecNerdctlSimple(t *testing.T) {

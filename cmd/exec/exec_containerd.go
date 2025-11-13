@@ -23,9 +23,9 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/iximiuz/cdebug/pkg/cliutil"
-	"github.com/iximiuz/cdebug/pkg/containerd"
-	"github.com/iximiuz/cdebug/pkg/uuid"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
+	"github.com/aohoyd/cdebug/pkg/containerd"
+	"github.com/aohoyd/cdebug/pkg/uuid"
 )
 
 func runDebuggerContainerd(ctx context.Context, cli cliutil.CLI, opts *options) error {

@@ -12,8 +12,8 @@ import (
 	"github.com/distribution/reference"
 	"github.com/spf13/cobra"
 
-	"github.com/iximiuz/cdebug/pkg/cliutil"
-	"github.com/iximiuz/cdebug/pkg/kubernetes"
+	"github.com/aohoyd/cdebug/pkg/cliutil"
+	"github.com/aohoyd/cdebug/pkg/kubernetes"
 )
 
 const (
