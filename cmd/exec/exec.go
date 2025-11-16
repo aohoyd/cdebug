@@ -267,8 +267,8 @@ func NewCommand(cli cliutil.CLI) *cobra.Command {
 		(*string)(&opts.overrideType),
 		"override-type",
 		string(kubernetes.DefaultOverrideType),
-		fmt.Sprintf(`[Kubernetes only] The method used to override the generated ephemeral container object: %s, %s, or %s.`,
-			kubernetes.OverrideTypeJSON, kubernetes.OverrideTypeMerge, kubernetes.OverrideTypeStrategic,
+		fmt.Sprintf(`[Kubernetes only] The method used to override the generated ephemeral container object: %s or %s.`,
+			kubernetes.OverrideTypeJSON, kubernetes.OverrideTypeMerge,
 		),
 	)
 

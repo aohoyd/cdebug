@@ -9,28 +9,16 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
+
 	"k8s.io/apimachinery/pkg/util/httpstream"
-	"k8s.io/apimachinery/pkg/util/strategicpatch"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
-	watchtools "k8s.io/client-go/tools/watch"
 
 	"github.com/aohoyd/cdebug/pkg/cliutil"
 	ckubernetes "github.com/aohoyd/cdebug/pkg/kubernetes"
+	"github.com/aohoyd/cdebug/pkg/kubernetes/types"
 	"github.com/aohoyd/cdebug/pkg/tty"
 	"github.com/aohoyd/cdebug/pkg/uuid"
 )
@@ -54,7 +42,7 @@ func runDebuggerKubernetes(ctx context.Context, cli cliutil.CLI, opts *options) 
 		return fmt.Errorf("error getting Kubernetes REST config: %v", err)
 	}
 
-	client, err := kubernetes.NewForConfig(config)
+	client, err := ckubernetes.NewClient(config)
 	if err != nil {
 		return fmt.Errorf("error creating Kubernetes client: %v", err)
 	}
@@ -110,7 +98,7 @@ func runDebuggerKubernetes(ctx context.Context, cli cliutil.CLI, opts *options) 
 	)
 }
 
-func runPodDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespace string, client kubernetes.Interface) (string, string, error) {
+func runPodDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespace string, client *ckubernetes.Client) (string, string, error) {
 	var (
 		podName    string
 		targetName string
@@ -124,10 +112,7 @@ func runPodDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespa
 		podName = opts.target
 	}
 
-	pod, err := client.
-		CoreV1().
-		Pods(namespace).
-		Get(ctx, podName, metav1.GetOptions{})
+	pod, err := client.GetPod(ctx, namespace, podName)
 	if err != nil {
 		return "", "", fmt.Errorf("error getting target pod: %v", err)
 	}
@@ -155,7 +140,7 @@ func runPodDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespa
 	return podName, debuggerName, nil
 }
 
-func runNodeDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespace string, client kubernetes.Interface) (string, string, error) {
+func runNodeDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespace string, client *ckubernetes.Client) (string, string, error) {
 	opts.target = strings.TrimPrefix(opts.target, "node/")
 	opts.target = strings.TrimPrefix(opts.target, "nodes/")
 
@@ -164,29 +149,31 @@ func runNodeDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namesp
 	debuggerName := "cdebug"
 	volumeName := "host-root"
 
-	p := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
+	p := &types.Pod{
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Metadata: types.ObjectMeta{
 			Name:      podName,
 			Namespace: namespace,
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
+		Spec: types.PodSpec{
+			Containers: []types.Container{
 				{
 					Name:            debuggerName,
 					Image:           opts.image,
-					ImagePullPolicy: corev1.PullIfNotPresent,
+					ImagePullPolicy: types.PullIfNotPresent,
 					Command:         []string{"sh", "-c", debuggerEntrypoint(cli, runID, 1, opts.image, opts.cmd, false)},
 					Stdin:           opts.stdin,
 					TTY:             opts.tty,
 					// Env:                   TODO...
 					// VolumeDevices: 			  TODO...
-					SecurityContext: &corev1.SecurityContext{
+					SecurityContext: &types.SecurityContext{
 						Privileged: &opts.privileged,
 						RunAsUser:  uidPtr(opts.user),
 						RunAsGroup: gidPtr(opts.user),
 					},
-					TerminationMessagePolicy: corev1.TerminationMessageReadFile,
-					VolumeMounts: []corev1.VolumeMount{
+					TerminationMessagePolicy: types.TerminationMessageReadFile,
+					VolumeMounts: []types.VolumeMount{
 						{
 							Name:      volumeName,
 							MountPath: "/host",
@@ -200,24 +187,24 @@ func runNodeDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namesp
 			HostIPC:     true,
 
 			NodeName:      opts.target,
-			RestartPolicy: corev1.RestartPolicyNever,
-			Tolerations: []corev1.Toleration{
+			RestartPolicy: types.RestartPolicyNever,
+			Tolerations: []types.Toleration{
 				{
-					Operator: corev1.TolerationOpExists,
+					Operator: types.TolerationOpExists,
 				},
 			},
-			Volumes: []corev1.Volume{
+			Volumes: []types.Volume{
 				{
 					Name: volumeName,
-					VolumeSource: corev1.VolumeSource{
-						HostPath: &corev1.HostPathVolumeSource{Path: "/"},
+					VolumeSource: types.VolumeSource{
+						HostPath: &types.HostPathVolumeSource{Path: "/"},
 					},
 				},
 			},
 		},
 	}
 
-	if _, err := client.CoreV1().Pods(namespace).Create(ctx, p, metav1.CreateOptions{}); err != nil {
+	if _, err := client.CreatePod(ctx, namespace, p); err != nil {
 		return "", "", fmt.Errorf("error creating debug pod: %v", err)
 	}
 
@@ -228,47 +215,31 @@ func addEphemeralDebugger(
 	ctx context.Context,
 	cli cliutil.CLI,
 	opts *options,
-	client kubernetes.Interface,
-	pod *corev1.Pod,
+	client *ckubernetes.Client,
+	pod *types.Pod,
 	targetName string,
 	debuggerName string,
 	entrypoint string,
 ) error {
-	podJSON, err := json.Marshal(pod)
-	if err != nil {
-		return fmt.Errorf("error creating JSON for pod: %v", err)
-	}
-
 	debugPod, err := withDebugContainer(cli, pod, opts, targetName, debuggerName, entrypoint)
 	if err != nil {
 		return err
 	}
 
-	debugJSON, err := json.Marshal(debugPod)
+	patchData, err := json.Marshal(map[string]any{
+		"spec": map[string]any{
+			"ephemeralContainers": debugPod.Spec.EphemeralContainers,
+		},
+	})
 	if err != nil {
-		return fmt.Errorf("error creating JSON for debug container: %v", err)
+		return fmt.Errorf("error creating patch: %v", err)
 	}
 
-	patch, err := strategicpatch.CreateTwoWayMergePatch(podJSON, debugJSON, pod)
-	if err != nil {
-		return fmt.Errorf("error creating patch to add debug container: %v", err)
-	}
-
-	_, err = client.
-		CoreV1().
-		Pods(pod.Namespace).
-		Patch(
-			ctx,
-			pod.Name,
-			types.StrategicMergePatchType,
-			patch,
-			metav1.PatchOptions{},
-			"ephemeralcontainers",
-		)
+	_, err = client.PatchPod(ctx, pod.Metadata.Namespace, pod.Metadata.Name, "ephemeralcontainers", patchData)
 	if err != nil {
 		// The apiserver will return a 404 when the EphemeralContainers feature is disabled because the `/ephemeralcontainers` subresource
 		// is missing. Unlike the 404 returned by a missing pod, the status details will be empty.
-		if serr, ok := err.(*apierrors.StatusError); ok && serr.Status().Reason == metav1.StatusReasonNotFound && serr.ErrStatus.Details.Name == "" {
+		if strings.Contains(err.Error(), "404") {
 			return fmt.Errorf("ephemeral containers are disabled for this cluster (error from server: %q)", err)
 		}
 
@@ -280,30 +251,28 @@ func addEphemeralDebugger(
 
 func withDebugContainer(
 	cli cliutil.CLI,
-	pod *corev1.Pod,
+	pod *types.Pod,
 	opts *options,
 	targetName string,
 	debuggerName string,
 	entrypoint string,
-) (*corev1.Pod, error) {
-	ec := &corev1.EphemeralContainer{
-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
-			Name:            debuggerName,
-			Image:           opts.image,
-			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"sh", "-c", entrypoint},
-			Stdin:           opts.stdin,
-			TTY:             opts.tty,
-			// Env:                   TODO...
-			// VolumeDevices: 			  TODO...
-			SecurityContext: &corev1.SecurityContext{
-				Privileged: &opts.privileged,
-				RunAsUser:  uidPtr(opts.user),
-				RunAsGroup: gidPtr(opts.user),
-			},
-			TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+) (*types.Pod, error) {
+	ec := &types.EphemeralContainer{
+		Name:            debuggerName,
+		Image:           opts.image,
+		ImagePullPolicy: types.PullIfNotPresent,
+		Command:         []string{"sh", "-c", entrypoint},
+		Stdin:           opts.stdin,
+		TTY:             opts.tty,
+		// Env:                   TODO...
+		// VolumeDevices: 			  TODO...
+		SecurityContext: &types.SecurityContext{
+			Privileged: &opts.privileged,
+			RunAsUser:  uidPtr(opts.user),
+			RunAsGroup: gidPtr(opts.user),
 		},
-		TargetContainerName: targetName,
+		TerminationMessagePolicy: types.TerminationMessageReadFile,
+		TargetContainerName:      targetName,
 	}
 
 	if runsAsNonRoot(pod, targetName) && isRootUser(opts.user) {
@@ -339,7 +308,14 @@ func withDebugContainer(
 		}
 	}
 
-	copied := pod.DeepCopy()
+	// Create a copy of the pod
+	copied := &types.Pod{
+		APIVersion: pod.APIVersion,
+		Kind:       pod.Kind,
+		Metadata:   pod.Metadata,
+		Spec:       pod.Spec,
+		Status:     pod.Status,
+	}
 	copied.Spec.EphemeralContainers = append(copied.Spec.EphemeralContainers, *ec)
 
 	return copied, nil
@@ -347,54 +323,39 @@ func withDebugContainer(
 
 func waitForContainer(
 	ctx context.Context,
-	client kubernetes.Interface,
+	client *ckubernetes.Client,
 	ns string,
 	podName string,
 	containerName string,
 	running bool,
-) (*corev1.Pod, error) {
-	ctx, cancel := watchtools.ContextWithOptionalTimeout(ctx, 0*time.Second)
-	defer cancel()
-
-	fieldSelector := fields.OneTermEqualSelector("metadata.name", podName).String()
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = fieldSelector
-			return client.CoreV1().Pods(ns).List(ctx, options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = fieldSelector
-			return client.CoreV1().Pods(ns).Watch(ctx, options)
-		},
-	}
-
-	ev, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(ev watch.Event) (bool, error) {
-		switch ev.Type {
-		case watch.Deleted:
-			return false, apierrors.NewNotFound(schema.GroupResource{Resource: "pods"}, "")
-		}
-
-		p, ok := ev.Object.(*corev1.Pod)
-		if !ok {
-			return false, fmt.Errorf("watch did not return a pod: %v", ev.Object)
-		}
-
-		s := containerStatusByName(p, containerName)
-		if s == nil {
-			return false, nil
-		}
-
-		if s.LastTerminationState.Terminated != nil || s.State.Terminated != nil || (running && s.State.Running != nil) {
-			return true, nil
-		}
-
-		return false, nil
+) (*types.Pod, error) {
+	watcher, err := client.WatchPods(ctx, ns, ckubernetes.WatchOptions{
+		FieldSelector: fmt.Sprintf("metadata.name=%s", podName),
 	})
-	if ev != nil {
-		return ev.Object.(*corev1.Pod), err
+	if err != nil {
+		return nil, fmt.Errorf("failed to watch pod: %w", err)
 	}
+	defer watcher.Stop()
 
-	return nil, err
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ev := <-watcher.ResultChan():
+			if ev.Type == types.PodDeleted {
+				return nil, fmt.Errorf("pod %q was deleted", podName)
+			}
+
+			s := containerStatusByName(ev.Pod, containerName)
+			if s == nil {
+				continue
+			}
+
+			if s.LastTerminationState.Terminated != nil || s.State.Terminated != nil || (running && s.State.Running != nil) {
+				return ev.Pod, nil
+			}
+		}
+	}
 }
 
 func attachPodDebugger(
@@ -402,7 +363,7 @@ func attachPodDebugger(
 	cli cliutil.CLI,
 	opts *options,
 	config *restclient.Config,
-	client kubernetes.Interface,
+	client *ckubernetes.Client,
 	ns string,
 	podName string,
 	debuggerName string,
@@ -434,7 +395,7 @@ func attachPodDebugger(
 			status.State.Terminated.ExitCode)
 	}
 
-	var debuggerContainer *corev1.Container
+	var debuggerContainer *types.Container
 	if ephemeral {
 		debuggerContainer = ephemeralContainerByName(pod, debuggerName)
 	} else {
@@ -458,19 +419,17 @@ func attachPodDebugger(
 
 	cli.PrintAux("Attaching to debugger container...\n")
 	cli.PrintAux("If you don't see a command prompt, try pressing enter.\n")
-	req := client.CoreV1().RESTClient().
-		Post().
-		Resource("pods").
-		Name(podName).
-		Namespace(ns).
-		SubResource("attach").
-		VersionedParams(&corev1.PodAttachOptions{
-			Container: debuggerName,
-			Stdin:     opts.stdin,
-			Stdout:    true,
-			Stderr:    !opts.tty,
-			TTY:       opts.tty,
-		}, scheme.ParameterCodec)
+
+	// Build attach URL
+	attachURL, _ := url.Parse(config.Host)
+	attachURL.Path = fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/attach", ns, podName)
+	q := attachURL.Query()
+	q.Set("container", debuggerName)
+	q.Set("stdin", strconv.FormatBool(opts.stdin))
+	q.Set("stdout", "true")
+	q.Set("stderr", strconv.FormatBool(!opts.tty))
+	q.Set("tty", strconv.FormatBool(opts.tty))
+	attachURL.RawQuery = q.Encode()
 
 	streamingCtx, cancelStreamingCtx := context.WithCancel(ctx)
 	defer cancelStreamingCtx()
@@ -481,7 +440,7 @@ func attachPodDebugger(
 		cancelStreamingCtx()
 	}()
 
-	if err := stream(streamingCtx, cli, req.URL(), config, opts.tty); err != nil {
+	if err := stream(streamingCtx, cli, attachURL, config, opts.tty); err != nil {
 		return fmt.Errorf("error streaming to/from debugger container: %v", err)
 	}
 
@@ -541,18 +500,16 @@ func stream(
 
 func dumpDebuggerLogs(
 	ctx context.Context,
-	client kubernetes.Interface,
+	client *ckubernetes.Client,
 	ns string,
 	podName string,
 	containerName string,
 	out io.Writer,
 ) error {
-	req := client.CoreV1().Pods(ns).GetLogs(podName, &corev1.PodLogOptions{
+	readCloser, err := client.GetPodLogs(ctx, ns, podName, ckubernetes.PodLogOptions{
 		Container: containerName,
 		Follow:    false,
 	})
-
-	readCloser, err := req.Stream(ctx)
 	if err != nil {
 		return err
 	}
@@ -573,7 +530,7 @@ func dumpDebuggerLogs(
 	}
 }
 
-func isReadOnlyRootFS(pod *corev1.Pod, containerName string) bool {
+func isReadOnlyRootFS(pod *types.Pod, containerName string) bool {
 	c := containerByName(pod, containerName)
 	return c != nil &&
 		c.SecurityContext != nil &&
@@ -581,7 +538,7 @@ func isReadOnlyRootFS(pod *corev1.Pod, containerName string) bool {
 		*c.SecurityContext.ReadOnlyRootFilesystem
 }
 
-func runsAsNonRoot(pod *corev1.Pod, containerName string) bool {
+func runsAsNonRoot(pod *types.Pod, containerName string) bool {
 	// Container security context takes precedence over pod security context.
 	c := containerByName(pod, containerName)
 	if c != nil && c.SecurityContext != nil && c.SecurityContext.RunAsNonRoot != nil && *c.SecurityContext.RunAsNonRoot {
@@ -591,7 +548,7 @@ func runsAsNonRoot(pod *corev1.Pod, containerName string) bool {
 	return pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.RunAsNonRoot != nil && *pod.Spec.SecurityContext.RunAsNonRoot
 }
 
-func preferredUID(pod *corev1.Pod, containerName string) *int64 {
+func preferredUID(pod *types.Pod, containerName string) *int64 {
 	c := containerByName(pod, containerName)
 	if c != nil && c.SecurityContext != nil && c.SecurityContext.RunAsUser != nil {
 		return c.SecurityContext.RunAsUser
@@ -604,7 +561,7 @@ func preferredUID(pod *corev1.Pod, containerName string) *int64 {
 	return ptr(int64(1000))
 }
 
-func preferredGID(pod *corev1.Pod, containerName string) *int64 {
+func preferredGID(pod *types.Pod, containerName string) *int64 {
 	c := containerByName(pod, containerName)
 	if c != nil && c.SecurityContext != nil && c.SecurityContext.RunAsGroup != nil {
 		return c.SecurityContext.RunAsGroup
@@ -617,8 +574,8 @@ func preferredGID(pod *corev1.Pod, containerName string) *int64 {
 	return ptr(int64(1000))
 }
 
-func containerStatusByName(pod *corev1.Pod, containerName string) *corev1.ContainerStatus {
-	allContainerStatus := [][]corev1.ContainerStatus{
+func containerStatusByName(pod *types.Pod, containerName string) *types.ContainerStatus {
+	allContainerStatus := [][]types.ContainerStatus{
 		pod.Status.InitContainerStatuses,
 		pod.Status.ContainerStatuses,
 		pod.Status.EphemeralContainerStatuses,
@@ -633,7 +590,7 @@ func containerStatusByName(pod *corev1.Pod, containerName string) *corev1.Contai
 	return nil
 }
 
-func containerByName(pod *corev1.Pod, containerName string) *corev1.Container {
+func containerByName(pod *types.Pod, containerName string) *types.Container {
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].Name == containerName {
 			return &pod.Spec.Containers[i]
@@ -642,11 +599,24 @@ func containerByName(pod *corev1.Pod, containerName string) *corev1.Container {
 	return nil
 }
 
-func ephemeralContainerByName(pod *corev1.Pod, containerName string) *corev1.Container {
+func ephemeralContainerByName(pod *types.Pod, containerName string) *types.Container {
 	for i := range pod.Spec.EphemeralContainers {
 		if pod.Spec.EphemeralContainers[i].Name == containerName {
-			c := corev1.Container(pod.Spec.EphemeralContainers[i].EphemeralContainerCommon)
-			return &c
+			// Convert EphemeralContainer to Container (they share same fields)
+			c := &types.Container{
+				Name:                     pod.Spec.EphemeralContainers[i].Name,
+				Image:                    pod.Spec.EphemeralContainers[i].Image,
+				Command:                  pod.Spec.EphemeralContainers[i].Command,
+				Args:                     pod.Spec.EphemeralContainers[i].Args,
+				Env:                      pod.Spec.EphemeralContainers[i].Env,
+				VolumeMounts:             pod.Spec.EphemeralContainers[i].VolumeMounts,
+				SecurityContext:          pod.Spec.EphemeralContainers[i].SecurityContext,
+				ImagePullPolicy:          pod.Spec.EphemeralContainers[i].ImagePullPolicy,
+				Stdin:                    pod.Spec.EphemeralContainers[i].Stdin,
+				TTY:                      pod.Spec.EphemeralContainers[i].TTY,
+				TerminationMessagePolicy: pod.Spec.EphemeralContainers[i].TerminationMessagePolicy,
+			}
+			return c
 		}
 	}
 	return nil
