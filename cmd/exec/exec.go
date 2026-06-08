@@ -18,6 +18,7 @@ import (
 
 const (
 	defaultToolkitImage = "docker.io/library/busybox:musl"
+	defaultShell        = "sh"
 
 	schemaContainerd = "containerd://"
 	schemaDocker     = "docker://"
@@ -85,6 +86,7 @@ type options struct {
 	detach     bool
 	cmd        []string
 	user       string
+	chroot     bool
 	privileged bool
 	autoRemove bool
 	quiet      bool
@@ -214,6 +216,13 @@ func NewCommand(cli cliutil.CLI) *cobra.Command {
 		"",
 		`Run the debugger container as User (format: <name|uid>[:<group|gid>])`,
 	)
+	flags.BoolVarP(
+		&opts.chroot,
+		"chroot",
+		"c",
+		false,
+		`Run the debugger container and chroot into it (works only with root user)`,
+	)
 	flags.BoolVar(
 		&opts.privileged,
 		"privileged",
@@ -287,9 +296,14 @@ var (
 set -eu
 
 export CDEBUG_ROOTFS=/
+TARGET_ROOTFS=/proc/{{ .TARGET_PID }}/root/
+
+if [ "{{ .TARGET_PID }}" == "0" ]; then
+	TARGET_ROOTFS=/host/
+fi
 
 if [ "${HOME:-/}" != "/" ]; then
-	ln -s /proc/{{ .TARGET_PID }}/root/ ${HOME}target-rootfs
+	ln -s ${TARGET_ROOTFS} ${HOME}/target-rootfs
 fi
 
 # TODO: Add target container's PATH to the user's PATH

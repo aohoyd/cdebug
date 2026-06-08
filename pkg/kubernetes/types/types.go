@@ -162,8 +162,8 @@ type VolumeMount struct {
 
 // Volume represents a pod volume
 type Volume struct {
-	Name         string       `json:"name"`
-	VolumeSource VolumeSource `json:",inline"`
+	Name         string `json:"name"`
+	VolumeSource `json:",inline"`
 }
 
 // VolumeSource represents the source of a volume

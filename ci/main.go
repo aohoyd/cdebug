@@ -25,7 +25,7 @@ import (
 type Ci struct{}
 
 func (m *Ci) Build(ctx context.Context, src *dagger.Directory) *dagger.File {
-	return dag.Go().FromVersion("1.22").Build(src, dagger.GoBuildOpts{
+	return dag.Go().FromVersion("1.26").Build(src, dagger.GoBuildOpts{
 		Static: true,
 	}).File("cdebug")
 }
@@ -57,7 +57,7 @@ func (m *Ci) TestContainerdExec(ctx context.Context, src *dagger.Directory) *dag
 		From("tianon/containerd")
 
 	return dag.Go().
-		FromVersion("1.22").
+		FromVersion("1.26").
 		Base().
 		With(dag.Go().GlobalCache).
 		WithDirectory("/usr/local/bin", containerd.Directory("/usr/local/bin")).
@@ -95,7 +95,7 @@ func (m *Ci) TestDockerExec(ctx context.Context, src *dagger.Directory) (*dagger
 		})
 
 	return dag.Go().
-		FromVersion("1.22-alpine").
+		FromVersion("1.26-alpine").
 		Base().
 		With(dag.Go().GlobalCache).
 		WithFile("/usr/local/bin/cdebug", cdebug).

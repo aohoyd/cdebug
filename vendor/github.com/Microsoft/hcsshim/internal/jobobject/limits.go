@@ -38,6 +38,12 @@ func (job *JobObject) SetResourceLimits(limits *JobLimits) error {
 		}
 	}
 
+	if limits.CPUAffinity != 0 {
+		if err := job.SetCPUAffinity(limits.CPUAffinity); err != nil {
+			return fmt.Errorf("failed to set job object cpu affinity: %w", err)
+		}
+	}
+
 	if limits.MaxBandwidth != 0 || limits.MaxIOPS != 0 {
 		if err := job.SetIOLimit(limits.MaxBandwidth, limits.MaxIOPS); err != nil {
 			return fmt.Errorf("failed to set io limit on job object: %w", err)
@@ -143,6 +149,14 @@ func (job *JobObject) SetCPUAffinity(affinityBitMask uint64) error {
 		return err
 	}
 	info.BasicLimitInformation.LimitFlags |= uint32(windows.JOB_OBJECT_LIMIT_AFFINITY)
+
+	// We really, really shouldn't be running on 32 bit, but just in case (and to satisfy CodeQL) ...
+	const maxUintptr = ^uintptr(0)
+	if affinityBitMask > uint64(maxUintptr) {
+		return fmt.Errorf("affinity bitmask (%d) exceeds max allowable value (%d)", affinityBitMask, maxUintptr)
+	}
+
+	// CodeQL [SM03681] checked against max value above (there is no math.MaxUintPtr ...)
 	info.BasicLimitInformation.Affinity = uintptr(affinityBitMask)
 	return job.setExtendedInformation(info)
 }

@@ -123,7 +123,7 @@ func runPodDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namespa
 
 	cli.PrintAux("Starting debugger container...\n")
 
-	useChroot := isRootUser(opts.user) && !isReadOnlyRootFS(pod, targetName) && !runsAsNonRoot(pod, targetName)
+	useChroot := opts.chroot && isRootUser(opts.user) && !isReadOnlyRootFS(pod, targetName) && !runsAsNonRoot(pod, targetName)
 	if err := addEphemeralDebugger(
 		ctx,
 		cli,
@@ -162,7 +162,7 @@ func runNodeDebugger(ctx context.Context, cli cliutil.CLI, opts *options, namesp
 					Name:            debuggerName,
 					Image:           opts.image,
 					ImagePullPolicy: types.PullIfNotPresent,
-					Command:         []string{"sh", "-c", debuggerEntrypoint(cli, runID, 1, opts.image, opts.cmd, false)},
+					Command:         []string{"sh", "-c", debuggerEntrypoint(cli, runID, 0, opts.image, opts.cmd, false)},
 					Stdin:           opts.stdin,
 					TTY:             opts.tty,
 					// Env:                   TODO...

@@ -12,14 +12,14 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	offcontainerd "github.com/containerd/containerd"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/cmd/ctr/commands"
-	"github.com/containerd/containerd/cmd/ctr/commands/tasks"
-	"github.com/containerd/containerd/containers"
-	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/platforms"
+	offcontainerd "github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/cmd/ctr/commands"
+	"github.com/containerd/containerd/v2/cmd/ctr/commands/tasks"
+	"github.com/containerd/containerd/v2/core/containers"
+	"github.com/containerd/containerd/v2/pkg/cio"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/containerd/platforms"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
@@ -116,7 +116,7 @@ func runDebuggerContainerd(ctx context.Context, cli cliutil.CLI, opts *options) 
 				oci.WithDefaultPathEnv,
 				oci.WithImageConfig(image), // May override the default $PATH.
 				oci.WithProcessArgs("sh", "-c", debuggerEntrypoint(
-					cli, runID, targetPID, opts.image, opts.cmd, isRootUser(opts.user),
+					cli, runID, targetPID, opts.image, opts.cmd, opts.chroot && isRootUser(opts.user),
 				)),
 				func() oci.SpecOpts {
 					if opts.tty {
